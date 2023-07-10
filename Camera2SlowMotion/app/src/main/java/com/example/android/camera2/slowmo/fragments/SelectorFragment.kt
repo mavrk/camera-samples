@@ -18,19 +18,27 @@ package com.example.android.camera2.slowmo.fragments
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.Bundle
+import android.util.Log
 import android.util.Size
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.MimeTypeMap
+import android.widget.Button
 import android.widget.TextView
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.Navigation
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.android.camera.utils.GenericListAdapter
+import com.example.android.camera2.slowmo.BuildConfig
+import com.example.android.camera2.slowmo.CameraStoreViewModel
 import com.example.android.camera2.slowmo.R
 
 /**
@@ -39,35 +47,56 @@ import com.example.android.camera2.slowmo.R
  */
 class SelectorFragment : Fragment() {
 
+  private lateinit var viewModel: CameraStoreViewModel
+
     override fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
             savedInstanceState: Bundle?
-    ): View? = RecyclerView(requireContext())
+    ): View? {
+      viewModel = ViewModelProvider(requireActivity())[CameraStoreViewModel::class.java]
+      return RecyclerView(requireContext())
+    }
 
     @SuppressLint("MissingPermission")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         view as RecyclerView
         view.apply {
+            Log.d("TAG", "LAST RECORDED VIDEO IS THIS!! " + viewModel.lastRecorded)
             layoutManager = LinearLayoutManager(requireContext())
 
             val cameraManager =
                     requireContext().getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
-            val cameraList = enumerateHighSpeedCameras(cameraManager)
-
+            val cameraList = enumerateHighSpeedCameras(cameraManager).toMutableList()
+            if (viewModel.lastOpFile != null) {
+              Log.d("TAG", "ADDING BUTTON TO THIS!! " + viewModel.lastRecorded)
+              cameraList += CameraInfo("Last recorded", "b", Size(100, 100), 100)
+            }
+            Log.d("Camera list ", cameraList.toString())
             val layoutId = android.R.layout.simple_list_item_1
             adapter = GenericListAdapter(cameraList, itemLayoutId = layoutId) { view, item, _ ->
                 view.findViewById<TextView>(android.R.id.text1).text = item.title
                 view.setOnClickListener {
-                    Navigation.findNavController(requireActivity(), R.id.fragment_container)
-                            .navigate(SelectorFragmentDirections.actionSelectorToCamera(
-                                    item.cameraId, item.size.width, item.size.height, item.fps))
+                   if(item.title == "Last recorded") {
+                       startActivity(Intent().apply {
+                         action = Intent.ACTION_VIEW
+                         type = MimeTypeMap.getSingleton()
+                           .getMimeTypeFromExtension(viewModel.lastRecorded)
+                         val authority = "${BuildConfig.APPLICATION_ID}.provider"
+                         data = FileProvider.getUriForFile(view.context, authority, viewModel.lastOpFile!!)
+                         flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                           Intent.FLAG_ACTIVITY_CLEAR_TOP
+                       })
+                   } else {
+                     Navigation.findNavController(requireActivity(), R.id.fragment_container)
+                       .navigate(SelectorFragmentDirections.actionSelectorToCamera(
+                         item.cameraId, item.size.width, item.size.height, item.fps))
+                   }
                 }
             }
         }
-
     }
 
     companion object {

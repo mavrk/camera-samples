@@ -19,16 +19,19 @@ package com.example.android.camera2.slowmo
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
 import com.example.android.camera2.slowmo.databinding.ActivityCameraBinding
 
 class CameraActivity : AppCompatActivity() {
 
     private lateinit var activityCameraBinding: ActivityCameraBinding
+    private lateinit var viewModel: CameraStoreViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         activityCameraBinding = ActivityCameraBinding.inflate(layoutInflater)
         setContentView(activityCameraBinding.root)
+        viewModel = ViewModelProvider(this).get(CameraStoreViewModel::class.java)
     }
 
     override fun onResume() {

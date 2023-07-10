@@ -20,19 +20,19 @@ apply plugin: 'kotlin-kapt'
 apply plugin: "androidx.navigation.safeargs"
 
 android {
-    compileSdkVersion 29
+    compileSdk 33
     defaultConfig {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         applicationId "com.android.example.camera2.slowmo"
         minSdkVersion 23
-        targetSdkVersion 29
+        targetSdk 33
         versionCode 1
         versionName "1.0.0"
     }
 
     compileOptions {
-        sourceCompatibility rootProject.ext.java_version
-        targetCompatibility rootProject.ext.java_version
+        sourceCompatibility java_version
+        targetCompatibility java_version
     }
 
     kotlinOptions {
@@ -93,3 +93,35 @@ dependencies {
     androidTestImplementation 'androidx.test:runner:1.2.0'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
 }
+
+//plugins {
+//    id "com.google.protobuf" version "0.8.17"
+//
+//}
+//dependencies {
+///*************************************************************
+// *  Proto Data Store
+// *************************************************************/
+//    implementation  "androidx.datastore:datastore-core:1.0.0"
+//    implementation  "com.google.protobuf:protobuf-javalite:3.18.0"
+//
+///*************************************************************
+// *  Preference Data Store(Excluding this might cause some errors.)
+// *************************************************************/
+//    implementation "androidx.datastore:datastore-preferences:1.0.0"
+//}
+//protobuf {
+//    protoc {
+//        artifact = "com.google.protobuf:protoc:3.14.0"
+//    }
+//    generateProtoTasks {
+//        all().each { task ->
+//            task.builtins {
+//                java {
+//                    option 'lite'
+//
+//                }
+//            }
+//        }
+//    }
+//}

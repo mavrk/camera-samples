@@ -20,6 +20,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
@@ -43,6 +44,7 @@ import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toDrawable
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.Navigation
@@ -53,6 +55,7 @@ import com.example.android.camera.utils.SmartSize
 import com.example.android.camera.utils.getDisplaySmartSize
 import com.example.android.camera2.slowmo.BuildConfig
 import com.example.android.camera2.slowmo.CameraActivity
+import com.example.android.camera2.slowmo.CameraStoreViewModel
 import com.example.android.camera2.slowmo.R
 import com.example.android.camera2.slowmo.databinding.FragmentCameraBinding
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +77,8 @@ class CameraFragment : Fragment() {
     private var _fragmentCameraBinding: FragmentCameraBinding? = null
 
     private val fragmentCameraBinding get() = _fragmentCameraBinding!!
+
+    private lateinit var viewModel: CameraStoreViewModel
 
     /** AndroidX navigation arguments */
     private val args: CameraFragmentArgs by navArgs()
@@ -189,6 +194,7 @@ class CameraFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _fragmentCameraBinding = FragmentCameraBinding.inflate(inflater, container, false)
+        viewModel = ViewModelProvider(requireActivity())[CameraStoreViewModel::class.java]
         return fragmentCameraBinding.root
     }
 
@@ -214,6 +220,7 @@ class CameraFragment : Fragment() {
 
                 // To ensure that size is set, initialize camera in the view's thread
                 fragmentCameraBinding.viewFinder.post { initializeCamera() }
+                fragmentCameraBinding.viewFinder.post { scheduleRecording() }
             }
         })
 
@@ -223,6 +230,15 @@ class CameraFragment : Fragment() {
                 orientation -> Log.d(TAG, "Orientation changed: $orientation")
             })
         }
+    }
+
+    private fun scheduleRecording() = lifecycleScope.launch(Dispatchers.Main) {
+        Log.w(TAG, "Scheduling recording")
+        delay(4000)
+        Log.w(TAG, "Starting recording")
+        startRecording(fragmentCameraBinding.viewFinder.rootView)
+        delay(3000)
+        stopRecording(fragmentCameraBinding.viewFinder.rootView)
     }
 
     /** Creates a [MediaRecorder] instance using the provided [Surface] as input */
@@ -311,71 +327,78 @@ class CameraFragment : Fragment() {
         fragmentCameraBinding.captureButton.setOnTouchListener { view, event ->
             when (event.action) {
 
-                MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
+                MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) { startRecording(view) }
 
-                    // Prevents screen rotation during the video recording
-                    requireActivity().requestedOrientation =
-                            ActivityInfo.SCREEN_ORIENTATION_LOCKED
-
-                    // Stops preview requests, and start record requests
-                    session.stopRepeating()
-                    session.setRepeatingBurst(recordRequestList, null, cameraHandler)
-
-                    // Finalizes recorder setup and starts recording
-                    recorder.apply {
-                        // Sets output orientation based on current sensor value at start time
-                        relativeOrientation.value?.let { setOrientationHint(it) }
-                        prepare()
-                        start()
-                    }
-                    recordingStartMillis = System.currentTimeMillis()
-                    Log.d(TAG, "Recording started")
-
-                    // Starts recording animation
-                    fragmentCameraBinding.overlay.post(animationTask)
-                }
-
-                MotionEvent.ACTION_UP -> lifecycleScope.launch(Dispatchers.IO) {
-
-                    // Unlocks screen rotation after recording finished
-                    requireActivity().requestedOrientation =
-                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-
-                    // Requires recording of at least MIN_REQUIRED_RECORDING_TIME_MILLIS
-                    val elapsedTimeMillis = System.currentTimeMillis() - recordingStartMillis
-                    if (elapsedTimeMillis < MIN_REQUIRED_RECORDING_TIME_MILLIS) {
-                        delay(MIN_REQUIRED_RECORDING_TIME_MILLIS - elapsedTimeMillis)
-                    }
-
-                    Log.d(TAG, "Recording stopped. Output file: $outputFile")
-                    recorder.stop()
-
-                    // Removes recording animation
-                    fragmentCameraBinding.overlay.removeCallbacks(animationTask)
-
-                    // Broadcasts the media file to the rest of the system
-                    MediaScannerConnection.scanFile(
-                            view.context, arrayOf(outputFile.absolutePath), null, null)
-
-                    // Launch external activity via intent to play video recorded using our provider
-                    startActivity(Intent().apply {
-                        action = Intent.ACTION_VIEW
-                        type = MimeTypeMap.getSingleton()
-                                .getMimeTypeFromExtension(outputFile.extension)
-                        val authority = "${BuildConfig.APPLICATION_ID}.provider"
-                        data = FileProvider.getUriForFile(view.context, authority, outputFile)
-                        flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                                Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    })
-
-                    // Finishes our current camera screen
-                    delay(CameraActivity.ANIMATION_SLOW_MILLIS)
-                    navController.popBackStack()
-                }
+                MotionEvent.ACTION_UP -> lifecycleScope.launch(Dispatchers.IO) {stopRecording(view) }
             }
 
             true
         }
+    }
+
+    suspend fun startRecording(view: View) {
+        // Prevents screen rotation during the video recording
+        requireActivity().requestedOrientation =
+            ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        fragmentCameraBinding.captureButton.backgroundTintList = ColorStateList.valueOf(Color.RED)
+
+        // Stops preview requests, and start record requests
+        session.stopRepeating()
+        session.setRepeatingBurst(recordRequestList, null, cameraHandler)
+
+        // Finalizes recorder setup and starts recording
+        recorder.apply {
+            // Sets output orientation based on current sensor value at start time
+            relativeOrientation.value?.let { setOrientationHint(it) }
+            prepare()
+            start()
+        }
+        recordingStartMillis = System.currentTimeMillis()
+        Log.d(TAG, "Recording started")
+
+        // Starts recording animation
+        // fragmentCameraBinding.overlay.post(animationTask)
+    }
+
+    suspend fun stopRecording(view: View) {
+        // Unlocks screen rotation after recording finished
+        fragmentCameraBinding.captureButton.backgroundTintList = ColorStateList.valueOf(Color.WHITE)
+        requireActivity().requestedOrientation =
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+        // Requires recording of at least MIN_REQUIRED_RECORDING_TIME_MILLIS
+        val elapsedTimeMillis = System.currentTimeMillis() - recordingStartMillis
+        if (elapsedTimeMillis < MIN_REQUIRED_RECORDING_TIME_MILLIS) {
+            delay(MIN_REQUIRED_RECORDING_TIME_MILLIS - elapsedTimeMillis)
+        }
+
+        Log.d(TAG, "Recording stopped. Output file: $outputFile")
+        recorder.stop()
+
+        // Removes recording animation
+        // fragmentCameraBinding.overlay.removeCallbacks(animationTask)
+
+        // Broadcasts the media file to the rest of the system
+        MediaScannerConnection.scanFile(
+            view.context , arrayOf(outputFile.absolutePath), null, null)
+
+        // Launch external activity via intent to play video recorded using our provider
+        // startActivity(Intent().apply {
+        //     action = Intent.ACTION_VIEW
+        //     type = MimeTypeMap.getSingleton()
+        //         .getMimeTypeFromExtension(outputFile.extension)
+        //     val authority = "${BuildConfig.APPLICATION_ID}.provider"
+        //     data = FileProvider.getUriForFile(view.context, authority, outputFile)
+        //     flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+        //       Intent.FLAG_ACTIVITY_CLEAR_TOP
+        // })
+
+        viewModel.lastRecorded = outputFile.absolutePath
+        viewModel.lastOpFile = outputFile
+
+        // Finishes our current camera screen
+        delay(CameraActivity.ANIMATION_SLOW_MILLIS + 1000)
+        navController.popBackStack()
     }
 
     /** Opens the camera and returns the opened device (as the result of the suspend coroutine) */
